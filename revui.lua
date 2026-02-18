@@ -4,9 +4,6 @@
     - Ventana arrastrable con minimizar/cerrar (tecla R para minimizar)
     - Pestañas superiores
     - Botones, Toggles, Sliders, Dropdowns, Labels, Paragraphs
-    - Notificaciones animadas
-    - Selector de estilos emergente (ideal para mixers)
-    - Colores morados con transparencia
 ]]
 
 local RevUILib = {}
@@ -778,3 +775,4 @@ function RevUILib:CreateWindow(config)
 end
 
 return RevUILib
+
