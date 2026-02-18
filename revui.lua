@@ -1,6 +1,7 @@
 --[[
-    RevUI - Librería de interfaz para Roblox
-    Versión corregida y mejorada
+    RevUI - Librería de interfaz para exploits de Roblox
+    Versión optimizada para entornos de inyección
+    by: Asistente
 ]]
 
 local RevUI = {}
@@ -9,11 +10,13 @@ local RevUI = {}
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 
--- Función para obtener el jugador local de forma segura
-local function getPlayer()
-    return Players.LocalPlayer
+-- Esperar a que el jugador local exista (útil si el script se ejecuta muy temprano)
+local player = Players.LocalPlayer
+if not player then
+    player = Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 end
 
 -- Configuración de colores por defecto
@@ -41,7 +44,7 @@ local defaultTransparency = {
     warning = 0.1
 }
 
--- Función auxiliar para redondear (por si acaso)
+-- Función auxiliar para redondear
 local function round(num)
     return math.floor(num + 0.5)
 end
@@ -50,23 +53,19 @@ end
 function RevUI:CreateWindow(config)
     config = config or {}
     local windowName = config.Name or "RevUI Window"
-    local windowSize = config.Size or UDim2.new(0, 500, 0, 650)  -- Corregido: antes era config.windowSize
+    local windowSize = config.Size or UDim2.new(0, 500, 0, 650)
     local windowPos = config.Position or UDim2.new(0.5, -250, 0.5, -325)
     local colors = config.Colors or defaultColors
     local transparency = config.Transparency or defaultTransparency
-
-    local player = getPlayer()
-    if not player then
-        warn("RevUI: No se pudo obtener el jugador local")
-        return
-    end
+    local parent = config.Parent or CoreGui  -- Por defecto usa CoreGui (más seguro para exploits)
 
     -- Crear ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "RevUI_" .. windowName
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-    screenGui.ResetOnSpawn = false
+    screenGui.Parent = parent
+    screenGui.ResetOnSpawn = false  -- Importante para que no desaparezca al morir
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.DisplayOrder = 999  -- Asegurar que esté por encima de otros elementos
 
     -- Ventana principal
     local mainFrame = Instance.new("Frame")
@@ -165,9 +164,11 @@ function RevUI:CreateWindow(config)
     -- Función para crear una pestaña
     function tabs:AddTab(tabName)
         local tabButton = Instance.new("TextButton")
-        -- Usamos un layout más flexible: los botones se ajustarán automáticamente
-        tabButton.Size = UDim2.new(0, 100, 1, -4)  -- Ancho fijo por ahora, se puede cambiar
-        tabButton.Position = UDim2.new((#self) * 0.15, 2, 0, 2)  -- Esto es mejorable, pero funciona
+        -- Para un número variable de pestañas, calculamos el ancho dinámicamente
+        local tabCount = #self + 1
+        local tabWidth = (tabBar.AbsoluteSize.X - (#self * 4)) / tabCount  -- Esto es solo referencia, usaremos UDim2 con escala
+        tabButton.Size = UDim2.new(0, 100, 1, -4)  -- Ancho fijo por simplicidad
+        tabButton.Position = UDim2.new(0, (#self) * 104 + 2, 0, 2)  -- Separación de 4 píxeles
         tabButton.BackgroundColor3 = colors.surface2
         tabButton.BackgroundTransparency = transparency.surface2
         tabButton.Text = tabName
@@ -215,7 +216,7 @@ function RevUI:CreateWindow(config)
             tabButton.TextColor3 = colors.text
             tabContent.Visible = true
             currentTab = {Button = tabButton, Content = tabContent}
-            updateCanvas()  -- Asegurar canvas correcto al mostrar
+            updateCanvas()
         end
 
         tabButton.MouseButton1Click:Connect(select)
@@ -425,7 +426,7 @@ function RevUI:CreateWindow(config)
                 dropdownConfig = dropdownConfig or {}
                 local options = dropdownConfig.Options or {}
                 if #options == 0 then
-                    warn("Dropdown sin opciones")
+                    warn("RevUI: Dropdown sin opciones")
                     return
                 end
                 local frame = Instance.new("Frame")
@@ -433,7 +434,7 @@ function RevUI:CreateWindow(config)
                 frame.BackgroundColor3 = colors.surface
                 frame.BackgroundTransparency = transparency.surface
                 frame.Parent = tabContent
-                frame.ClipsDescendants = true  -- Para que no se salga al expandir
+                frame.ClipsDescendants = true
 
                 local corner = Instance.new("UICorner")
                 corner.CornerRadius = UDim.new(0, 8)
@@ -490,13 +491,13 @@ function RevUI:CreateWindow(config)
                         selected = opt
                         button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. opt
                         dropdownFrame.Visible = false
-                        frame.Size = UDim2.new(0.9, 0, 0, 45)  -- Restaurar tamaño
+                        frame.Size = UDim2.new(0.9, 0, 0, 45)
                         callback(opt)
                         for _, btn in ipairs(optionButtons) do
                             btn.BackgroundColor3 = (btn.Text == opt) and colors.primary or colors.surface
                             btn.BackgroundTransparency = (btn.Text == opt) and transparency.primary or transparency.surface
                         end
-                        updateCanvas()  -- Actualizar canvas después de cerrar
+                        updateCanvas()
                     end)
 
                     table.insert(optionButtons, optBtn)
@@ -513,7 +514,7 @@ function RevUI:CreateWindow(config)
                         dropdownFrame.Visible = true
                         frame.Size = UDim2.new(0.9, 0, 0, 45 + dropdownHeight + 5)
                     end
-                    updateCanvas()  -- Actualizar canvas al expandir/contraer
+                    updateCanvas()
                 end)
 
                 updateCanvas()
@@ -587,7 +588,7 @@ function RevUI:CreateWindow(config)
         return tab
     end
 
-    -- Funcionalidad de minimizar (corregido)
+    -- Funcionalidad de minimizar
     local minimized = false
     minimizeBtn.MouseButton1Click:Connect(function()
         minimized = not minimized
@@ -622,20 +623,19 @@ function RevUI:Notify(config)
     config = config or {}
     local message = config.Content or "Notificación"
     local duration = config.Time or 3
-    local type = config.Type or "info" -- "success", "error", "warning", "info"
+    local type = config.Type or "info"
     local colors = config.Colors or defaultColors
     local transparency = config.Transparency or defaultTransparency
+    local parent = config.Parent or CoreGui
 
-    local player = getPlayer()
-    if not player then return end
-
-    local screenGui = player:FindFirstChild("PlayerGui"):FindFirstChild("RevUI_Notifications")
+    local screenGui = parent:FindFirstChild("RevUI_Notifications")
     if not screenGui then
         screenGui = Instance.new("ScreenGui")
         screenGui.Name = "RevUI_Notifications"
-        screenGui.Parent = player:WaitForChild("PlayerGui")
+        screenGui.Parent = parent
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.DisplayOrder = 1000
     end
 
     local holder = screenGui:FindFirstChild("NotificationHolder")
@@ -700,17 +700,16 @@ function RevUI:CreateModal(config)
     local buttons = config.Buttons or {{Text = "OK", Callback = function() end}}
     local colors = config.Colors or defaultColors
     local transparency = config.Transparency or defaultTransparency
+    local parent = config.Parent or CoreGui
 
-    local player = getPlayer()
-    if not player then return end
-
-    local screenGui = player:FindFirstChild("PlayerGui"):FindFirstChild("RevUI_Modals")
+    local screenGui = parent:FindFirstChild("RevUI_Modals")
     if not screenGui then
         screenGui = Instance.new("ScreenGui")
         screenGui.Name = "RevUI_Modals"
-        screenGui.Parent = player:WaitForChild("PlayerGui")
+        screenGui.Parent = parent
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.DisplayOrder = 1001
     end
 
     local modal = Instance.new("Frame")
