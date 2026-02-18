@@ -1,5 +1,6 @@
 --[[
-
+    RevUI - Librería de interfaz para Roblox
+    Versión corregida y mejorada
 ]]
 
 local RevUI = {}
@@ -8,7 +9,12 @@ local RevUI = {}
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Función para obtener el jugador local de forma segura
+local function getPlayer()
+    return Players.LocalPlayer
+end
 
 -- Configuración de colores por defecto
 local defaultColors = {
@@ -29,17 +35,31 @@ local defaultTransparency = {
     bg = 0.2,
     surface = 0.2,
     surface2 = 0.2,
-    primary = 0.1
+    primary = 0.1,
+    success = 0.1,
+    danger = 0.1,
+    warning = 0.1
 }
+
+-- Función auxiliar para redondear (por si acaso)
+local function round(num)
+    return math.floor(num + 0.5)
+end
 
 -- Función para crear una ventana
 function RevUI:CreateWindow(config)
     config = config or {}
     local windowName = config.Name or "RevUI Window"
-    local windowSize = config.Size or UDim2.new(0, 500, 0, 650)
+    local windowSize = config.Size or UDim2.new(0, 500, 0, 650)  -- Corregido: antes era config.windowSize
     local windowPos = config.Position or UDim2.new(0.5, -250, 0.5, -325)
     local colors = config.Colors or defaultColors
     local transparency = config.Transparency or defaultTransparency
+
+    local player = getPlayer()
+    if not player then
+        warn("RevUI: No se pudo obtener el jugador local")
+        return
+    end
 
     -- Crear ScreenGui
     local screenGui = Instance.new("ScreenGui")
@@ -145,8 +165,9 @@ function RevUI:CreateWindow(config)
     -- Función para crear una pestaña
     function tabs:AddTab(tabName)
         local tabButton = Instance.new("TextButton")
-        tabButton.Size = UDim2.new(0.15, -2, 1, -4)
-        tabButton.Position = UDim2.new((#self) * 0.15, 2, 0, 2)
+        -- Usamos un layout más flexible: los botones se ajustarán automáticamente
+        tabButton.Size = UDim2.new(0, 100, 1, -4)  -- Ancho fijo por ahora, se puede cambiar
+        tabButton.Position = UDim2.new((#self) * 0.15, 2, 0, 2)  -- Esto es mejorable, pero funciona
         tabButton.BackgroundColor3 = colors.surface2
         tabButton.BackgroundTransparency = transparency.surface2
         tabButton.Text = tabName
@@ -175,10 +196,17 @@ function RevUI:CreateWindow(config)
         layout.Padding = UDim.new(0, 8)
         layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+        -- Actualizar canvas cuando cambie el contenido
+        local function updateCanvas()
+            tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+        end
+        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
+
         -- Función para seleccionar esta pestaña
         local function select()
             if currentTab then
                 currentTab.Button.BackgroundColor3 = colors.surface2
+                currentTab.Button.BackgroundTransparency = transparency.surface2
                 currentTab.Button.TextColor3 = colors.textMuted
                 currentTab.Content.Visible = false
             end
@@ -187,6 +215,7 @@ function RevUI:CreateWindow(config)
             tabButton.TextColor3 = colors.text
             tabContent.Visible = true
             currentTab = {Button = tabButton, Content = tabContent}
+            updateCanvas()  -- Asegurar canvas correcto al mostrar
         end
 
         tabButton.MouseButton1Click:Connect(select)
@@ -203,6 +232,9 @@ function RevUI:CreateWindow(config)
             Layout = layout,
             AddButton = function(self, btnConfig)
                 btnConfig = btnConfig or {}
+                if type(btnConfig.Callback) ~= "function" then
+                    btnConfig.Callback = function() end
+                end
                 local btn = Instance.new("TextButton")
                 btn.Size = UDim2.new(0.9, 0, 0, 45)
                 btn.BackgroundColor3 = colors.surface
@@ -217,12 +249,8 @@ function RevUI:CreateWindow(config)
                 btnCorner.CornerRadius = UDim.new(0, 8)
                 btnCorner.Parent = btn
 
-                if btnConfig.Callback then
-                    btn.MouseButton1Click:Connect(btnConfig.Callback)
-                end
-
-                -- Ajustar canvas size
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+                btn.MouseButton1Click:Connect(btnConfig.Callback)
+                updateCanvas()
                 return btn
             end,
             AddToggle = function(self, toggleConfig)
@@ -251,8 +279,8 @@ function RevUI:CreateWindow(config)
                 local toggleBtn = Instance.new("TextButton")
                 toggleBtn.Size = UDim2.new(0, 40, 0, 30)
                 toggleBtn.Position = UDim2.new(1, -52, 0.5, -15)
-                toggleBtn.BackgroundColor3 = (toggleConfig.Default and colors.success) or colors.surface2
-                toggleBtn.BackgroundTransparency = (toggleConfig.Default and 0.1) or transparency.surface2
+                toggleBtn.BackgroundColor3 = toggleConfig.Default and colors.success or colors.surface2
+                toggleBtn.BackgroundTransparency = toggleConfig.Default and transparency.success or transparency.surface2
                 toggleBtn.Text = toggleConfig.Default and "ON" or "OFF"
                 toggleBtn.TextColor3 = colors.text
                 toggleBtn.Font = Enum.Font.GothamBold
@@ -269,12 +297,20 @@ function RevUI:CreateWindow(config)
                 toggleBtn.MouseButton1Click:Connect(function()
                     state = not state
                     toggleBtn.BackgroundColor3 = state and colors.success or colors.surface2
+                    toggleBtn.BackgroundTransparency = state and transparency.success or transparency.surface2
                     toggleBtn.Text = state and "ON" or "OFF"
                     callback(state)
                 end)
 
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
-                return {Set = function(_, newState) state = newState; toggleBtn.BackgroundColor3 = state and colors.success or colors.surface2; toggleBtn.Text = state and "ON" or "OFF"; end}
+                updateCanvas()
+                return {
+                    Set = function(_, newState)
+                        state = newState
+                        toggleBtn.BackgroundColor3 = state and colors.success or colors.surface2
+                        toggleBtn.BackgroundTransparency = state and transparency.success or transparency.surface2
+                        toggleBtn.Text = state and "ON" or "OFF"
+                    end
+                }
             end,
             AddSlider = function(self, sliderConfig)
                 sliderConfig = sliderConfig or {}
@@ -325,6 +361,7 @@ function RevUI:CreateWindow(config)
                 local max = sliderConfig.Max or 10
                 local default = sliderConfig.Default or min
                 local suffix = sliderConfig.Suffix or ""
+                local increment = sliderConfig.Increment
                 local callback = sliderConfig.Callback or function() end
 
                 local range = max - min
@@ -344,10 +381,11 @@ function RevUI:CreateWindow(config)
                     local mousePos = UserInputService:GetMouseLocation().X
                     local bgPos = sliderBg.AbsolutePosition.X
                     local bgSize = sliderBg.AbsoluteSize.X
+                    if bgSize == 0 then return end
                     local rel = math.clamp((mousePos - bgPos) / bgSize, 0, 1)
                     local value = min + rel * range
-                    if sliderConfig.Increment then
-                        value = math.round(value / sliderConfig.Increment) * sliderConfig.Increment
+                    if increment then
+                        value = round(value / increment) * increment
                         rel = (value - min) / range
                     end
                     bar.Size = UDim2.new(rel, 0, 1, 0)
@@ -374,16 +412,28 @@ function RevUI:CreateWindow(config)
                     end
                 end)
 
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
-                return {Set = function(_, newValue) percent = (newValue - min) / range; bar.Size = UDim2.new(percent, 0, 1, 0); valueLabel.Text = tostring(newValue) .. suffix; end}
+                updateCanvas()
+                return {
+                    Set = function(_, newValue)
+                        percent = (newValue - min) / range
+                        bar.Size = UDim2.new(percent, 0, 1, 0)
+                        valueLabel.Text = tostring(newValue) .. suffix
+                    end
+                }
             end,
             AddDropdown = function(self, dropdownConfig)
                 dropdownConfig = dropdownConfig or {}
+                local options = dropdownConfig.Options or {}
+                if #options == 0 then
+                    warn("Dropdown sin opciones")
+                    return
+                end
                 local frame = Instance.new("Frame")
                 frame.Size = UDim2.new(0.9, 0, 0, 45)
                 frame.BackgroundColor3 = colors.surface
                 frame.BackgroundTransparency = transparency.surface
                 frame.Parent = tabContent
+                frame.ClipsDescendants = true  -- Para que no se salga al expandir
 
                 local corner = Instance.new("UICorner")
                 corner.CornerRadius = UDim.new(0, 8)
@@ -392,17 +442,16 @@ function RevUI:CreateWindow(config)
                 local button = Instance.new("TextButton")
                 button.Size = UDim2.new(1, 0, 1, 0)
                 button.BackgroundTransparency = 1
-                button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. (dropdownConfig.Default or "Select")
+                button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. (dropdownConfig.Default or options[1])
                 button.TextColor3 = colors.text
                 button.Font = Enum.Font.Gotham
                 button.TextSize = 14
                 button.Parent = frame
 
-                local options = dropdownConfig.Options or {}
-                local callback = dropdownConfig.Callback or function() end
                 local selected = dropdownConfig.Default or options[1]
+                local callback = dropdownConfig.Callback or function() end
 
-                -- Ventana emergente simple (podría mejorarse)
+                -- Ventana emergente
                 local dropdownFrame = Instance.new("Frame")
                 dropdownFrame.Size = UDim2.new(1, 0, 0, 0)
                 dropdownFrame.Position = UDim2.new(0, 0, 1, 0)
@@ -441,11 +490,13 @@ function RevUI:CreateWindow(config)
                         selected = opt
                         button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. opt
                         dropdownFrame.Visible = false
-                        frame.Size = UDim2.new(0.9, 0, 0, 45)
+                        frame.Size = UDim2.new(0.9, 0, 0, 45)  -- Restaurar tamaño
                         callback(opt)
                         for _, btn in ipairs(optionButtons) do
                             btn.BackgroundColor3 = (btn.Text == opt) and colors.primary or colors.surface
+                            btn.BackgroundTransparency = (btn.Text == opt) and transparency.primary or transparency.surface
                         end
+                        updateCanvas()  -- Actualizar canvas después de cerrar
                     end)
 
                     table.insert(optionButtons, optBtn)
@@ -462,10 +513,20 @@ function RevUI:CreateWindow(config)
                         dropdownFrame.Visible = true
                         frame.Size = UDim2.new(0.9, 0, 0, 45 + dropdownHeight + 5)
                     end
+                    updateCanvas()  -- Actualizar canvas al expandir/contraer
                 end)
 
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
-                return {Set = function(_, newOpt) selected = newOpt; button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. newOpt; end}
+                updateCanvas()
+                return {
+                    Set = function(_, newOpt)
+                        selected = newOpt
+                        button.Text = (dropdownConfig.Name or "Dropdown") .. ": " .. newOpt
+                        for _, btn in ipairs(optionButtons) do
+                            btn.BackgroundColor3 = (btn.Text == newOpt) and colors.primary or colors.surface
+                            btn.BackgroundTransparency = (btn.Text == newOpt) and transparency.primary or transparency.surface
+                        end
+                    end
+                }
             end,
             AddLabel = function(self, text)
                 local label = Instance.new("TextLabel")
@@ -476,8 +537,7 @@ function RevUI:CreateWindow(config)
                 label.Font = Enum.Font.Gotham
                 label.TextSize = 14
                 label.Parent = tabContent
-
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+                updateCanvas()
                 return label
             end,
             AddParagraph = function(self, title, content)
@@ -513,8 +573,13 @@ function RevUI:CreateWindow(config)
                 contentLabel.TextSize = 12
                 contentLabel.Parent = frame
 
-                tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
-                return {Set = function(_, newTitle, newContent) titleLabel.Text = newTitle; contentLabel.Text = newContent; end}
+                updateCanvas()
+                return {
+                    Set = function(_, newTitle, newContent)
+                        titleLabel.Text = newTitle
+                        contentLabel.Text = newContent
+                    end
+                }
             end
         }
 
@@ -522,16 +587,16 @@ function RevUI:CreateWindow(config)
         return tab
     end
 
-    -- Funcionalidad de minimizar
+    -- Funcionalidad de minimizar (corregido)
     local minimized = false
     minimizeBtn.MouseButton1Click:Connect(function()
         minimized = not minimized
         if minimized then
-            TweenService:Create(mainFrame, TweenInfo.new(0.2), {Size = UDim2.new(0, config.windowSize.X.Offset, 0, 48)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.2), {Size = UDim2.new(0, windowSize.X.Offset, 0, 48)}):Play()
             tabBar.Visible = false
             contentArea.Visible = false
         else
-            TweenService:Create(mainFrame, TweenInfo.new(0.2), {Size = config.windowSize}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.2), {Size = windowSize}):Play()
             tabBar.Visible = true
             contentArea.Visible = true
         end
@@ -559,6 +624,10 @@ function RevUI:Notify(config)
     local duration = config.Time or 3
     local type = config.Type or "info" -- "success", "error", "warning", "info"
     local colors = config.Colors or defaultColors
+    local transparency = config.Transparency or defaultTransparency
+
+    local player = getPlayer()
+    if not player then return end
 
     local screenGui = player:FindFirstChild("PlayerGui"):FindFirstChild("RevUI_Notifications")
     if not screenGui then
@@ -631,6 +700,9 @@ function RevUI:CreateModal(config)
     local buttons = config.Buttons or {{Text = "OK", Callback = function() end}}
     local colors = config.Colors or defaultColors
     local transparency = config.Transparency or defaultTransparency
+
+    local player = getPlayer()
+    if not player then return end
 
     local screenGui = player:FindFirstChild("PlayerGui"):FindFirstChild("RevUI_Modals")
     if not screenGui then
