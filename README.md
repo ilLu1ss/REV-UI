@@ -6,7 +6,7 @@
 
 #  **REV UI** 
 
-** Una UI simple y funcional para roblox **  
+**Una UI simple y funcional para roblox**  
 *--*
 
 [![Version](https://img.shields.io/badge/version-1.0.0-9cf?style=for-the-badge&logo=github)](https://github.com/tuuser/tu-repo/releases)
@@ -35,5 +35,5 @@
 
 ### 
 ```lua
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/TUUSER/TUREPO/main/src/init.lua"))()
--- ¡Listo! Ya puedes usarla
+local Library = loadstring(game:HttpGet("aunada"))()
+
