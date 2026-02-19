@@ -23,7 +23,7 @@
 
 ------- **-----** --------
 
-| Característica | Otras | TuLibreria |
+| Característica | Otras |  |
 |:---:|:---:|:---:|
 |  **Diseño** | Básico | **Moderno** |
 |  **Performance** | Laggy | **** |
